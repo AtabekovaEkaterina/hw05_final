@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Об авторе проекта{% endblock %}
+{% block content %}
+<div class="container py-5">
+  <h1>Привет, я автор.</h1>
+  <p><img src="{% static 'img/user.gif' %}" width="200" height="150" alt="" align="left" vspace="5" hspace="5">
+    Меня зовут Екатерина и я пока только учусь програмированию.
+    <br>В мир програмирования я пришла исходя из своего желания координально поменять специальность.
+    <br>Уверена, что любое желание и цели осуществимы, если приложить усилия. 
+    Если Вам интересно, чему я уже успела научиться, вот ссылка на мой
+    <a href="https://github.com/AtabekovaEkaterina">
+      <img src="{% static 'img/githab.png' %}" width="25" height="25" class="d-inline-block align-top" alt="">GitHub
+    </a> 
+  </p>
+</div>
+{% endblock %}
