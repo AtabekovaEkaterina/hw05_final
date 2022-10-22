@@ -197,14 +197,20 @@ class PostPagesTests(TestCase):
         """
         page = {
             'сreate_follow': reverse(
-            'posts:profile_follow', kwargs={'username': PostPagesTests.user}
+                'posts:profile_follow', kwargs={
+                    'username': PostPagesTests.user
+                }
             ),
             'check_follow': reverse('posts:follow_index'),
             'delete_follow': reverse(
-            'posts:profile_unfollow', kwargs={'username': PostPagesTests.user}
+                'posts:profile_unfollow', kwargs={
+                    'username': PostPagesTests.user
+                }
             ),
             'follow_to_yourself': reverse(
-            'posts:profile_follow', kwargs={'username': PostPagesTests.user_2}
+                'posts:profile_follow', kwargs={
+                    'username': PostPagesTests.user_2
+                }
             ),
         }
 
