@@ -66,6 +66,24 @@ class PostPagesTests(TestCase):
             ), 'posts/create_post.html'
             ),
         ]
+        cls.page_follow = {
+            'сreate_follow': reverse(
+                'posts:profile_follow', kwargs={
+                    'username': PostPagesTests.user
+                }
+            ),
+            'check_follow': reverse('posts:follow_index'),
+            'delete_follow': reverse(
+                'posts:profile_unfollow', kwargs={
+                    'username': PostPagesTests.user
+                }
+            ),
+            'follow_to_yourself': reverse(
+                'posts:profile_follow', kwargs={
+                    'username': PostPagesTests.user_2
+                }
+            ),
+        }
 
     @classmethod
     def tearDownClass(cls):
@@ -73,6 +91,7 @@ class PostPagesTests(TestCase):
         shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
 
     def setUp(self):
+        self.guest_client = Client()
         self.authorized_client = Client()
         self.authorized_client.force_login(PostPagesTests.user_2)
         self.author = Client()
@@ -190,44 +209,77 @@ class PostPagesTests(TestCase):
         third_response = self.authorized_client.get(page_name)
         self.assertNotEqual(third_response.content, first_response.content)
 
-    def test_profile_follow_and_profile_unfollow(self):
-        """
-        Авторизованный пользователь может подписаться на другого
-        и удалить подписку. Пользователь не может подписаться на себя.
-        """
-        page = {
-            'сreate_follow': reverse(
-                'posts:profile_follow', kwargs={
-                    'username': PostPagesTests.user
-                }
-            ),
-            'check_follow': reverse('posts:follow_index'),
-            'delete_follow': reverse(
-                'posts:profile_unfollow', kwargs={
-                    'username': PostPagesTests.user
-                }
-            ),
-            'follow_to_yourself': reverse(
-                'posts:profile_follow', kwargs={
-                    'username': PostPagesTests.user_2
-                }
-            ),
-        }
-
+    def test_profile_follow_page_for_authorized_client(self):
+        """Авторизованный пользователь может подписаться на другого."""
         follow_count = Follow.objects.count()
-        first_response = self.authorized_client.get(page['check_follow'])
-        self.authorized_client.get(page['сreate_follow'])
-        second_response = self.authorized_client.get(page['check_follow'])
-        self.assertNotEqual(first_response.content, second_response.content)
+        self.authorized_client.get(
+            PostPagesTests.page_follow['сreate_follow']
+        )
         self.assertEqual(Follow.objects.count(), follow_count + 1)
         self.assertEqual(Follow.objects.last().user, PostPagesTests.user_2)
         self.assertEqual(Follow.objects.last().author, PostPagesTests.user)
 
-        first_response = self.authorized_client.get(page['delete_follow'])
+    def test_profile_follow_page_request_follow_to_yourself(self):
+        """Авторизованный пользователь не может подписаться на себя."""
+        follow_count = Follow.objects.count()
+        self.authorized_client.get(
+            PostPagesTests.page_follow['follow_to_yourself']
+        )
         self.assertEqual(Follow.objects.count(), follow_count)
 
-        self.authorized_client.get(page['follow_to_yourself'])
+    def test_profile_unfollow_page_for_authorized_client(self):
+        """ Авторизованный пользователь может удалить подписку."""
+        self.authorized_client.get(
+            PostPagesTests.page_follow['сreate_follow']
+        )
+        follow_count = Follow.objects.count()
+        self.authorized_client.get(
+            PostPagesTests.page_follow['delete_follow']
+        )
+        self.assertEqual(Follow.objects.count(), follow_count - 1)
+
+    def test_profile_follow_page_for_guest_client(self):
+        """Неавторизованный пользователь не может подписаться."""
+        follow_count = Follow.objects.count()
+        self.guest_client.get(
+            PostPagesTests.page_follow['сreate_follow']
+        )
         self.assertEqual(Follow.objects.count(), follow_count)
+
+    def test_follow_index_pages_for_authorized_client(self):
+        """
+        После осуществления подписки авторизованным пользователем,
+        посты появляются у него на странице подписок.
+        """
+        first_response = self.authorized_client.get(
+            PostPagesTests.page_follow['check_follow']
+        )
+        self.authorized_client.get(
+            PostPagesTests.page_follow['сreate_follow']
+        )
+        second_response = self.authorized_client.get(
+            PostPagesTests.page_follow['check_follow']
+        )
+        self.assertNotEqual(first_response.content, second_response.content)
+
+    def test_follow_index_pages_for_not_following_client(self):
+        """
+        Пост не появляется на странице подписок пользователя
+        после его создания, если у пользователя нет подписки
+        на автора поста.
+        """
+        first_response = self.authorized_client.get(
+            PostPagesTests.page_follow['check_follow']
+        )
+        Post.objects.create(
+            author=PostPagesTests.user,
+            group=PostPagesTests.group,
+            text='Новый пост',
+        )
+        second_response = self.authorized_client.get(
+            PostPagesTests.page_follow['check_follow']
+        )
+        self.assertEqual(first_response.content, second_response.content)
 
 
 class PaginatorTests(TestCase):
@@ -235,6 +287,7 @@ class PaginatorTests(TestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.user = User.objects.create_user(username='test_author')
+        cls.user_2 = User.objects.create_user(username='test_user')
         cls.group = Group.objects.create(
             title='Тестовая группа',
             slug='test-slug',
@@ -246,13 +299,17 @@ class PaginatorTests(TestCase):
                 group=cls.group,
                 text=f'Тестовый пост{i}',
             )
+        cls.follow = Follow.objects.create(
+            user=cls.user_2,
+            author=cls.user,
+        )
 
     def setUp(self):
-        self.author = Client()
-        self.author.force_login(PaginatorTests.user)
+        self.authorized_client = Client()
+        self.authorized_client.force_login(PaginatorTests.user_2)
 
-    def test_paginator_index_group_list_profile_pages(self):
-        """Проверка работы paginator index, group_list, profile.
+    def test_paginator_index_group_list_profile_follow_index_pages(self):
+        """Проверка работы paginator index, group_list, profile, follow_index.
         На первых страницах отражено 10 постов,
         на вторых страницах отражно - 2 поста.
         """
@@ -262,16 +319,19 @@ class PaginatorTests(TestCase):
             reverse(
                 'posts:group_list', kwargs={'slug': PaginatorTests.group.slug}
             ),
-            reverse('posts:profile', kwargs={'username': PaginatorTests.user}),
+            reverse(
+                'posts:profile', kwargs={'username': PaginatorTests.user}
+            ),
+            reverse('posts:follow_index'),
         ]
         for page_name in pages_names:
             with self.subTest(page_name=page_name):
-                response = self.author.get(page_name)
+                response = self.authorized_client.get(page_name)
                 self.assertEqual(
                     len(response.context['page_obj']),
                     settings.POSTS_PER_PAGE
                 )
-                response = self.author.get(page_name + '?page=2')
+                response = self.authorized_client.get(page_name + '?page=2')
                 self.assertEqual(
                     len(response.context['page_obj']),
                     settings.POSTS_TO_CHECK_PAGINATOR - settings.POSTS_PER_PAGE
